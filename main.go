@@ -2,45 +2,28 @@ package main
 
 import (
 	"fmt"
+	"github.com/gorilla/mux"
+	"io"
 	"net/http"
-	"regexp"
-	"strings"
 )
 
-func index(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
-		statusNotFoundHandler(w, r)
-		return
-	}
-
-	w.Write([]byte("Hello world!"))
-}
-
-func hello(w http.ResponseWriter, r *http.Request) {
-	pathRegexp := regexp.MustCompile(`^/hello/\w+$`)
-	if !pathRegexp.Match([]byte(r.URL.Path)) {
-		statusNotFoundHandler(w, r)
-		return
-	}
-
-	name := strings.Split(r.URL.Path, "/")[2]
-	w.Write([]byte(fmt.Sprintf("Hello, %s", name)))
-}
-
-func statusNotFoundHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotFound)
-	w.Write([]byte("404 page not found"))
-}
-
 func main() {
-	mux := http.NewServeMux()
+	router := mux.NewRouter()
+	router.HandleFunc("/", home)
+	router.HandleFunc(`/product/{id:\d+}`, product)
 
-	mux.HandleFunc("/", index)
-	mux.HandleFunc("/hello/", hello)
-
-	err := http.ListenAndServe(":8081", mux)
-
+	err := http.ListenAndServe(":8081", router)
 	if err != nil {
 		panic(err)
 	}
+}
+
+func home(w http.ResponseWriter, r *http.Request) {
+	io.WriteString(w, "Home")
+}
+
+func product(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	id := vars["id"]
+	fmt.Fprintf(w, "Product ID %s", id)
 }
