@@ -1,46 +1,72 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
-	"regexp"
-	"strings"
+
+	"github.com/go-playground/validator/v10"
 )
 
-func index(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
-		statusNotFoundHandler(w, r)
-		return
-	}
-
-	w.Write([]byte("Hello world!"))
-}
-
-func hello(w http.ResponseWriter, r *http.Request) {
-	pathRegexp := regexp.MustCompile(`^/hello/\w+$`)
-	if !pathRegexp.Match([]byte(r.URL.Path)) {
-		statusNotFoundHandler(w, r)
-		return
-	}
-
-	name := strings.Split(r.URL.Path, "/")[2]
-	w.Write([]byte(fmt.Sprintf("Hello, %s", name)))
-}
-
-func statusNotFoundHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotFound)
-	w.Write([]byte("404 page not found"))
+type User struct {
+	Id    int16  `json:"id" validate:"required"`
+	Name  string `json:"name" validate:"len=20"`
+	Email string `json:"email"`
+	Phone string `json:"phone"`
 }
 
 func main() {
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("/", index)
-	mux.HandleFunc("/hello/", hello)
-
-	err := http.ListenAndServe(":8081", mux)
+	http.HandleFunc("/user", UserHandler)
+	err := http.ListenAndServe(":8081", nil)
 
 	if err != nil {
 		panic(err)
 	}
+}
+
+func WriteJson(w http.ResponseWriter, staus int, v any) error {
+	w.Header().Set("Content-Type", "application/json")
+	return json.NewEncoder(w).Encode(v)
+}
+
+func UserHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		WriteJson(w, http.StatusMethodNotAllowed, map[string]any{
+			"ok":    false,
+			"error": "method not allowed",
+		})
+		return
+	}
+
+	var user User
+	err := json.NewDecoder(r.Body).Decode(&user)
+
+	validate := validator.New()
+	if errValidate := validate.Struct(user); errValidate != nil {
+		errs := errValidate.(validator.ValidationErrors)
+		var field string
+		for _, fieldErr := range errs {
+			field = fieldErr.Field()
+		}
+
+		WriteJson(w, http.StatusMethodNotAllowed, map[string]any{
+			"ok":    false,
+			"error": field,
+		})
+		return
+	}
+
+	if err != nil {
+		WriteJson(w, http.StatusInternalServerError, map[string]any{
+			"ok":    false,
+			"error": err.Error(),
+		})
+		return
+	}
+
+	fmt.Printf("user %v", user)
+
+	WriteJson(w, http.StatusOK, map[string]any{
+		"ok": true,
+	})
 }
